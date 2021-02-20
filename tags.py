@@ -23,7 +23,8 @@ four tag categories in a dictionary:
   "other", for other tags that do not fall into the other three categories.
 See the 'process_map' and 'test' functions for examples of the expected format.
 """
-OSMFILE = 'example.osm'
+OSM_FILE = 'mapRH.osm'
+OSMFILE = 'sample.osm'
 
 lower = re.compile(r'^([a-z]|_)*$')
 lower_colon = re.compile(r'^([a-z]|_)*:([a-z]|_)*$')
@@ -70,7 +71,7 @@ def test():
     # Note that the assertion below will be incorrect then.
     # Note as well that the test function here is only used in the Test Run;
     # when you submit, your code will be checked against a different dataset.
-    keys = process_map('example.osm')
+    keys = process_map('sample.osm')
     pprint.pprint(keys)
     assert keys == {'lower': 5, 'lower_colon': 0, 'other': 1, 'problemchars': 1}
 
