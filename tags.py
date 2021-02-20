@@ -1,222 +1,79 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-"""
-Load the data, perform iterative parsing and audittng and write the
-output to csv files. 
-
-"""
-import csv
-import codecs
+import xml.etree.cElementTree as ET
 import pprint
 import re
-import xml.etree.cElementTree as ET
-import cerberus
-import schema
-import os
+"""
+Your task is to explore the data a bit more.
+Before you process the data and add it into your database, you should check the
+"k" value for each "<tag>" and see if there are any potential problems.
 
-import audit
+We have provided you with 3 regular expressions to check for certain patterns
+in the tags. As we saw in the quiz earlier, we would like to change the data
+model and expand the "addr:street" type of keys to a dictionary like this:
+{"address": {"street": "Some value"}}
+So, we have to see if we have such tags, and if we have any tags with
+problematic characters.
 
-OSM_PATH = "warsaw_poland.osm"
+Please complete the function 'key_type', such that we have a count of each of
+four tag categories in a dictionary:
+  "lower", for tags that contain only lowercase letters and are valid,
+  "lower_colon", for otherwise valid tags with a colon in their names,
+  "problemchars", for tags with problematic characters, and
+  "other", for other tags that do not fall into the other three categories.
+See the 'process_map' and 'test' functions for examples of the expected format.
+"""
+OSMFILE = 'example.osm'
 
-if not os.path.exists('./CSV_Files'):
-    os.makedirs('./CSV_Files/')
+lower = re.compile(r'^([a-z]|_)*$')
+lower_colon = re.compile(r'^([a-z]|_)*:([a-z]|_)*$')
+problemchars = re.compile(r'[=\+/&<>;\'"\?%#$@\,\. \t\r\n]')
 
-NODES_PATH = './CSV_Files/' + OSM_PATH[:-4] + "_nodes.csv"
-NODE_TAGS_PATH ='./CSV_Files/' + OSM_PATH[:-4] + "_nodes_tags.csv"
-WAYS_PATH = './CSV_Files/' + OSM_PATH[:-4] + "_ways.csv"
-WAY_NODES_PATH = './CSV_Files/' + OSM_PATH[:-4] + "_ways_nodes.csv"
-WAY_TAGS_PATH = './CSV_Files/' + OSM_PATH[:-4] + "_ways_tags.csv"
-
-LOWER_COLON = re.compile(r'^([a-z]|_)+:([a-z]|_)+')
-PROBLEMCHARS = re.compile(r'[=\+/&<>;\'"\?%#$@\,\. \t\r\n]')
-
-SCHEMA = schema.schema
-
-audit.building_mapping={}
-audit.cafe_names_mapping={}
-
-# Make sure the fields order in the csvs matches the column order in the sql table schema
-NODE_FIELDS = ['id', 'lat', 'lon', 'user', 'uid', 'version', 'changeset', 'timestamp']
-NODE_TAGS_FIELDS = ['id', 'key', 'value', 'type']
-WAY_FIELDS = ['id', 'user', 'uid', 'version', 'changeset', 'timestamp']
-WAY_TAGS_FIELDS = ['id', 'key', 'value', 'type']
-WAY_NODES_FIELDS = ['id', 'node_id', 'position']
-
-
-def audit_k(tag, entries, default_tag_type):
-    '''Audit k attribute of element and return proper k and type values'''
-
-    k = tag.attrib['k']
-    if not PROBLEMCHARS.search(k):
-        index = k.find(':')
-        if index == -1:
-            entries['key'] = k
-            entries['type']= default_tag_type
-        else: 
-            entries['key'] = k[index+1:]
-            entries['type']= k[:index]
-    else:        
-        entries['type']= default_tag_type 
-                    
-    return entries
-    
+def key_type(element, keys):
+    if element.tag == "tag":
+        if lower.search(element.attrib['k']):
+            keys['lower'] += 1
+            # print('lower: ' + element.attrib['k'])
+            elif lower_colon.search(element.attrib['k']):
+            keys['lower_colon'] += 1
+            # print('lower_col: ' + element.attrib['k'])
+            elif upper.search(element.attrib['k']):
+            keys['upper'] += 1
+            # print('upper: ' + element.attrib['k'])
+            elif problemchars.search(element.attrib['k']):
+            keys['problemchars'] += 1
+            # print('prob: ' + element.attrib['k'])
+            else:
+            # print('other--  ' + element.attrib['k'])
+            keys['other'] += 1
+    return keys
 
 
-def shape_element(element, node_attr_fields=NODE_FIELDS, way_attr_fields=WAY_FIELDS,
-                  problem_chars=PROBLEMCHARS, default_tag_type='regular'):
-    """Clean and shape node or way XML element to Python dict"""
-    
-    node_attribs = {}
-    way_attribs = {}
-    way_nodes = []
-    tags = []  # Handle secondary tags the same way for both node and way elements
-    is_cafe = False
+
+def process_map(filename):
+    keys = {"lower": 0, "lower_colon": 0, "upper":0, "problemchars": 0, "other": 0}
+    for _, element in ET.iterparse(filename):
+        keys = key_type(element, keys)
+
+    return keys
 
 
-    if element.tag == 'node':
+if __name__ == "__main__":
+    pm = process_map(OSMFILE)
+    pprint.pprint(pm)
+pass
         
-        # Iterate over node fields
-        for tag in element.iter("node"):
-            for field in node_attr_fields:
-                node_attribs[field]= tag.attrib[field]
-                
-        # Iterate over tag fields&remember the cafe value
-        for tag in element.iter('tag'):
-            if tag.attrib['v'] =='cafe':
-                is_cafe = True
-
-        # Iterate over tag fields
-        for tag in element.iter('tag'):
-            entries={}
-            entries['id']= node_attribs['id']
-
-            # audit the v atttribute
-            entries['value'] = audit.audit_v(is_cafe, tag)
-
-            # audit the k attribute
-            entries = audit_k(tag, entries, default_tag_type)
-            tags.append(entries) 
-        return {'node': node_attribs, 'node_tags': tags}
-    
-    elif element.tag == 'way':
-        
-        # Iterate over way fields
-        for tag in element.iter('way'):
-            for field in way_attr_fields:
-                way_attribs[field]= tag.attrib[field]
-                
-        # Iterate over tag fields&remember the cafe value
-        for tag in element.iter('tag'):
-            if tag.attrib['v'] =='cafe':
-                is_cafe = True
-
-        # Iterate over tag fields        
-        for tag in element.iter('tag'):
-            entries={}
-            entries['id']= way_attribs['id']
-
-            # audit the v atttribute
-            entries['value'] = audit.audit_v(is_cafe, tag)
-
-            # audit the k attribute
-            entries = audit_k(tag, entries, default_tag_type)
-            tags.append(entries)
-            
-        # Iterate over nd fields
-        i=0
-        for tag in element.iter('nd'):
-            entriesnd={}
-            entriesnd['id']= way_attribs['id']
-            entriesnd['node_id'] = tag.attrib['ref']
-            entriesnd['position'] = i
-            i+=1
-            way_nodes.append(entriesnd)    
-        return {'way': way_attribs, 'way_nodes': way_nodes, 'way_tags': tags}
-
-
-# ================================================== #
-#               Helper Functions                     #
-# ================================================== #
-def get_element(osm_file, tags=('node', 'way', 'relation')):
-    """Yield element if it is the right type of tag"""
-
-    context = ET.iterparse(osm_file, events=('start', 'end'))
-    _, root = next(context)
-    for event, elem in context:
-        if event == 'end' and elem.tag in tags:
-            yield elem
-            root.clear()
-
-
-def validate_element(element, validator, schema=SCHEMA):
-    """Raise ValidationError if element does not match schema"""
-    if validator.validate(element, schema) is not True:
-        field, errors = next(validator.errors.iteritems())
-        message_string = "\nElement of type '{0}' has the following errors:\n{1}"
-        error_string = pprint.pformat(errors)
-        
-        raise Exception(message_string.format(field, error_string))
-
-
-class UnicodeDictWriter(csv.DictWriter, object):
-    """Extend csv.DictWriter to handle Unicode input"""
-
-    def writerow(self, row):
-        super(UnicodeDictWriter, self).writerow({
-            k: (v.encode('utf-8') if isinstance(v, unicode) else v) for k, v in row.iteritems()
-        })
-
-    def writerows(self, rows):
-        for row in rows:
-            self.writerow(row)
-
-
-# ================================================== #
-#               Main Function                        #
-# ================================================== #
-def process_map(file_in, validate):
-    """Iteratively process each XML element and write to csv(s)"""
     
 
-    with codecs.open(NODES_PATH, 'w') as nodes_file, \
-         codecs.open(NODE_TAGS_PATH, 'w') as nodes_tags_file, \
-         codecs.open(WAYS_PATH, 'w') as ways_file, \
-        codecs.open(WAY_NODES_PATH, 'w') as way_nodes_file, \
-         codecs.open(WAY_TAGS_PATH, 'w') as way_tags_file:
-
-        nodes_writer = UnicodeDictWriter(nodes_file, NODE_FIELDS)
-        node_tags_writer = UnicodeDictWriter(nodes_tags_file, NODE_TAGS_FIELDS)
-        ways_writer = UnicodeDictWriter(ways_file, WAY_FIELDS)
-        way_nodes_writer = UnicodeDictWriter(way_nodes_file, WAY_NODES_FIELDS)
-        way_tags_writer = UnicodeDictWriter(way_tags_file, WAY_TAGS_FIELDS)
-
-        nodes_writer.writeheader()
-        node_tags_writer.writeheader()
-        ways_writer.writeheader()
-        way_nodes_writer.writeheader()
-        way_tags_writer.writeheader()
-
-        validator = cerberus.Validator()
-
-        for element in get_element(file_in, tags=('node', 'way')):
-            el = shape_element(element)
-            if el:
-                if validate is True:
-                    validate_element(el, validator)
-
-                if element.tag == 'node':
-                    nodes_writer.writerow(el['node'])
-                    node_tags_writer.writerows(el['node_tags'])
-                elif element.tag == 'way':
-                    ways_writer.writerow(el['way'])
-                    way_nodes_writer.writerows(el['way_nodes'])
-                    way_tags_writer.writerows(el['way_tags'])
+def test():
+    # You can use another testfile 'map.osm' to look at your solution
+    # Note that the assertion below will be incorrect then.
+    # Note as well that the test function here is only used in the Test Run;
+    # when you submit, your code will be checked against a different dataset.
+    keys = process_map('example.osm')
+    pprint.pprint(keys)
+    assert keys == {'lower': 5, 'lower_colon': 0, 'other': 1, 'problemchars': 1}
 
 
-
-# Note: Validation is ~ 10X slower. For the project consider using a small
-# sample of the map when validating.
-    
-process_map(OSM_PATH, validate=False)
-print('Processed {} Map Succesfully!'.format(OSM_PATH[:-4]))
+    if __name__ == "__main__":
+    test()
