@@ -1,6 +1,5 @@
-CREATE TABLE( 
-    nodes (
-    id INTEGER PRIMARY KEY NOT NULL)
+CREATE TABLE nodes (
+    id INTEGER PRIMARY KEY NOT NULL
     
 );
 
