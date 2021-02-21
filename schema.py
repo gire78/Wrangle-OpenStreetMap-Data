@@ -1,6 +1,12 @@
 CREATE TABLE nodes (
-    id INTEGER PRIMARY KEY NOT NULL
-    
+    id INTEGER PRIMARY KEY NOT NULL,
+    lat REAL,
+    lon REAL,
+    user TEXT,
+    uid INTEGER,
+    version INTEGER,
+    changeset INTEGER,
+    timestamp TEXT
 );
 
 CREATE TABLE nodes_tags (
