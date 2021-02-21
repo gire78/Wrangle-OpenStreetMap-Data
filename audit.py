@@ -14,6 +14,7 @@ from collections import defaultdict
 import re
 import pprint
 
+OSM_FILE = "mapRH.osm"
 OSMFILE = "sample.osm"
 street_type_re = re.compile(r'\b\S+\.?$', re.IGNORECASE)
 
